@@ -7,6 +7,8 @@
     <link href="styles.css" rel="stylesheet">
     <!-- Whisper.js با نسخه ثابت -->
     <script src="https://unpkg.com/whisper-web@0.2.2/dist/whisper.js" defer></script>
+    <!-- اضافه کردن favicon ساده -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎥</text></svg>" type="image/svg+xml">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
     <div class="container bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full">
@@ -52,7 +54,7 @@
             <div class="upload-area border-2 border-dashed border-green-300 p-6 text-center rounded-lg hover:border-green-500 transition duration-300 mt-4 bg-green-50" id="audioUploadArea">
                 <p class="text-gray-600">فایل صوتی (MP3، WAV) برای تبدیل به زیرنویس با Whisper</p>
                 <input type="file" id="audioInput" accept="audio/*" class="hidden">
-                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105" onclick="document.getElementById('audioInput').click();">انتخاب فایل صوتی</button>
+                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105" id="audioSelectBtn">انتخاب فایل صوتی</button>
                 <button id="sttBtn" disabled class="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">تبدیل صدا به SRT</button>
                 <div id="sttProgress" class="mt-2 hidden">
                     <div class="w-full bg-gray-200 rounded-full h-2">

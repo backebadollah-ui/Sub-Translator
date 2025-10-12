@@ -74,6 +74,7 @@ const videoUploadArea = document.getElementById('videoUploadArea');
 const videoInput = document.getElementById('videoInput');
 const fileSelect = document.getElementById('fileSelect');
 const audioInput = document.getElementById('audioInput');
+const audioSelectBtn = document.getElementById('audioSelectBtn');
 const sttBtn = document.getElementById('sttBtn');
 const sttProgress = document.getElementById('sttProgress');
 const sttBar = document.getElementById('sttBar');
@@ -110,22 +111,24 @@ audioInput.addEventListener('change', (e) => {
         sttBtn.disabled = true;
     }
 });
-document.querySelector('#audioUploadArea button').addEventListener('click', () => audioInput.click());
+audioSelectBtn.addEventListener('click', () => audioInput.click());
 sttBtn.addEventListener('click', () => transcribeAudioToSRT());
 
 let whisper = null;
 async function initializeWhisper() {
     if (typeof WhisperFactory === 'undefined') {
         sttStatus.textContent = 'Whisper.js بارگذاری نشده، لطفاً صفحه را رفرش کنید.';
+        sttProgress.classList.remove('hidden');
         return null;
     }
     if (!whisper) {
         try {
+            sttStatus.textContent = 'در حال بارگذاری مدل Whisper...';
+            sttProgress.classList.remove('hidden');
             whisper = await WhisperFactory.create({
                 model: 'base', // می‌تونی به 'tiny' تغییر بدی برای سرعت بیشتر (کمتر دقیق)
                 language: 'multilingual', // برای فارسی/انگلیسی
                 downloadProgressCallback: (progress) => {
-                    sttProgress.classList.remove('hidden');
                     sttBar.style.width = `${progress * 100}%`;
                     sttStatus.textContent = `دانلود مدل: ${Math.round(progress * 100)}%`;
                 }
@@ -134,6 +137,7 @@ async function initializeWhisper() {
             return whisper;
         } catch (error) {
             console.error('خطا در بارگذاری Whisper:', error);
+            sttStatus.textContent = 'خطا در بارگذاری Whisper: ' + error.message;
             alert('خطا در بارگذاری Whisper: ' + error.message);
             sttProgress.classList.add('hidden');
             return null;
@@ -152,14 +156,16 @@ async function transcribeAudioToSRT() {
 
     const file = audioInput.files[0];
     const arrayBuffer = await file.arrayBuffer();
+    sttStatus.textContent = 'در حال پردازش فایل صوتی...';
     sttProgress.classList.remove('hidden');
-    sttStatus.textContent = 'در حال تبدیل صدا به متن...';
 
     try {
+        sttStatus.textContent = 'تبدیل صدا به متن...';
         const result = await whisperInstance.transcribe({
             audio: arrayBuffer,
             progressCallback: (progress) => {
                 sttBar.style.width = `${progress * 100}%`;
+                sttStatus.textContent = `تبدیل: ${Math.round(progress * 100)}%`;
             }
         });
 
@@ -197,14 +203,15 @@ async function transcribeAudioToSRT() {
             updateVideoSubtitles(currentSubtitles, currentFileType, assStyles);
         }
         updateProgressBars();
-        sttProgress.classList.add('hidden');
         sttStatus.textContent = 'تبدیل با موفقیت انجام شد!';
-        audioInput.value = '';
-        sttBtn.disabled = true;
     } catch (error) {
         console.error('خطا در تبدیل صدا:', error);
+        sttStatus.textContent = 'خطا در تبدیل صدا: ' + error.message;
         alert('خطا در تبدیل صدا: ' + error.message);
+    } finally {
         sttProgress.classList.add('hidden');
+        audioInput.value = '';
+        sttBtn.disabled = true;
     }
 }
 
