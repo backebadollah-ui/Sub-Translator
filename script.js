@@ -116,8 +116,8 @@ sttBtn.addEventListener('click', () => transcribeAudioToSRT());
 
 let whisper = null;
 async function initializeWhisper() {
-    if (typeof WhisperFactory === 'undefined') {
-        sttStatus.textContent = 'Whisper.js بارگذاری نشده، لطفاً صفحه را رفرش کنید.';
+    if (typeof WhisperTranscriber === 'undefined') {
+        sttStatus.textContent = 'Whisper Transcriber بارگذاری نشده، لطفاً صفحه را رفرش کنید.';
         sttProgress.classList.remove('hidden');
         return null;
     }
@@ -125,10 +125,9 @@ async function initializeWhisper() {
         try {
             sttStatus.textContent = 'در حال بارگذاری مدل Whisper...';
             sttProgress.classList.remove('hidden');
-            whisper = await WhisperFactory.create({
-                model: 'base', // می‌تونی به 'tiny' تغییر بدی برای سرعت بیشتر (کمتر دقیق)
-                language: 'multilingual', // برای فارسی/انگلیسی
-                downloadProgressCallback: (progress) => {
+            whisper = await WhisperTranscriber.create({
+                model: 'tiny-en-q5_1', // مدل سبک (~75 MB)، می‌تونی به 'base-en-q5_1' تغییر بدی (دقت بیشتر، ~150 MB)
+                progressCallback: (progress) => {
                     sttBar.style.width = `${progress * 100}%`;
                     sttStatus.textContent = `دانلود مدل: ${Math.round(progress * 100)}%`;
                 }
