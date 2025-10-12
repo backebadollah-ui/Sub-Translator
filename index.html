@@ -48,11 +48,12 @@
                 <input type="file" id="videoInput" accept="video/*" class="hidden">
                 <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">انتخاب ویدیو</button>
             </div>
-            <!-- بخش جدید: آپلود صوتی برای STT -->
+            <!-- بخش آپلود صوتی برای STT -->
             <div class="upload-area border-2 border-dashed border-green-300 p-6 text-center rounded-lg hover:border-green-500 transition duration-300 mt-4 bg-green-50" id="audioUploadArea">
                 <p class="text-gray-600">فایل صوتی (MP3، WAV) برای تبدیل به زیرنویس با Whisper</p>
                 <input type="file" id="audioInput" accept="audio/*" class="hidden">
-                <button id="sttBtn" class="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">تبدیل صدا به SRT</button>
+                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105" onclick="document.getElementById('audioInput').click();">انتخاب فایل صوتی</button>
+                <button id="sttBtn" disabled class="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">تبدیل صدا به SRT</button>
                 <div id="sttProgress" class="mt-2 hidden">
                     <div class="w-full bg-gray-200 rounded-full h-2">
                         <div id="sttBar" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>

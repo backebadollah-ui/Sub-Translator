@@ -1,6 +1,7 @@
 let apiKeys = JSON.parse(localStorage.getItem('apiKeys')) || {
     gemini: '',
     deepseek: '',
+    huggingface: '',
     openrouter: ''
 };
 let settings = JSON.parse(localStorage.getItem('translateSettings')) || {
@@ -105,8 +106,11 @@ videoInput.addEventListener('change', (e) => loadVideo(e.target.files[0]));
 audioInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
         sttBtn.disabled = false;
+    } else {
+        sttBtn.disabled = true;
     }
 });
+document.querySelector('#audioUploadArea button').addEventListener('click', () => audioInput.click());
 sttBtn.addEventListener('click', () => transcribeAudioToSRT());
 
 let whisper = null;
@@ -365,8 +369,12 @@ function parseSsa(content) {
 
 async function fetchModels(service) {
     const modelSelect = document.getElementById('model');
-    modelSelect.innerHTML = '<option value="">در حال بارگذاری مدل‌ها...</option>';
+    modelSelect.innerHTML = '<option value="">مدل را انتخاب کنید</option>';
     try {
+        if (service === 'gemini' && !apiKeys.gemini) {
+            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
+            return;
+        }
         if (service === 'gemini') {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKeys.gemini}`);
             if (!response.ok) throw new Error(`خطا: ${response.status}`);
@@ -379,6 +387,9 @@ async function fetchModels(service) {
                 option.textContent = model;
                 modelSelect.appendChild(option);
             });
+        } else if (service === 'deepseek' && !apiKeys.deepseek) {
+            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
+            return;
         } else if (service === 'deepseek') {
             modelSelect.innerHTML = '<option value="">مدل را انتخاب کنید</option>';
             ['DeepSeek-Pro', 'DeepSeek-RAG'].forEach(model => {
@@ -389,6 +400,9 @@ async function fetchModels(service) {
             });
         } else if (service === 'huggingface') {
             modelSelect.innerHTML = '<option value="facebook/nllb-200-distilled-600M">NLLB-200 (Multilingual)</option>';
+        } else if (service === 'openrouter' && !apiKeys.openrouter) {
+            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
+            return;
         } else if (service === 'openrouter') {
             const response = await fetch('https://openrouter.ai/api/v1/models', {
                 headers: { 'Authorization': `Bearer ${apiKeys.openrouter}` }
