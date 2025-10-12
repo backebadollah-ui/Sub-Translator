@@ -115,6 +115,10 @@ sttBtn.addEventListener('click', () => transcribeAudioToSRT());
 
 let whisper = null;
 async function initializeWhisper() {
+    if (typeof WhisperFactory === 'undefined') {
+        sttStatus.textContent = 'Whisper.js بارگذاری نشده، لطفاً صفحه را رفرش کنید.';
+        return null;
+    }
     if (!whisper) {
         try {
             whisper = await WhisperFactory.create({
@@ -127,12 +131,15 @@ async function initializeWhisper() {
                 }
             });
             sttStatus.textContent = 'آماده برای تبدیل صدا';
+            return whisper;
         } catch (error) {
             console.error('خطا در بارگذاری Whisper:', error);
             alert('خطا در بارگذاری Whisper: ' + error.message);
             sttProgress.classList.add('hidden');
+            return null;
         }
     }
+    return whisper;
 }
 
 async function transcribeAudioToSRT() {
@@ -140,8 +147,8 @@ async function transcribeAudioToSRT() {
         alert('لطفاً فایل صوتی انتخاب کنید.');
         return;
     }
-    await initializeWhisper();
-    if (!whisper) return;
+    const whisperInstance = await initializeWhisper();
+    if (!whisperInstance) return;
 
     const file = audioInput.files[0];
     const arrayBuffer = await file.arrayBuffer();
@@ -149,7 +156,7 @@ async function transcribeAudioToSRT() {
     sttStatus.textContent = 'در حال تبدیل صدا به متن...';
 
     try {
-        const result = await whisper.transcribe({
+        const result = await whisperInstance.transcribe({
             audio: arrayBuffer,
             progressCallback: (progress) => {
                 sttBar.style.width = `${progress * 100}%`;
