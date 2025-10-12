@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ترجمه‌گر زیرنویس AI</title>
+    <link href="styles.css" rel="stylesheet">
+    <!-- Whisper.cpp WASM -->
+    <script src="https://unpkg.com/whisper-web@latest/dist/whisper.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="container bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">ترجمه‌گر زیرنویس AI</h1>
+        <p class="text-gray-600 mb-6 text-center">ترجمه رایگان با هوش مصنوعی در ۳ قدم</p>
+
+        <!-- قدم ۱: API Key -->
+        <section class="step mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۱: تنظیم کلید API</h2>
+            <p class="text-gray-600 mb-4">کلید API برای سرویس انتخاب‌شده (اختیاری برای Hugging Face).</p>
+            <label class="block text-gray-600 mb-1">سرویس AI:</label>
+            <select id="service" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2 bg-white">
+                <option value="gemini">Google Gemini</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="huggingface">Hugging Face (بدون کلید)</option>
+                <option value="openrouter">OpenRouter (Grok/GPT)</option>
+            </select>
+            <button id="addKeyBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition duration-300 hover:scale-105">افزودن کلید جدید</button>
+            <input type="password" id="apiKey" placeholder="کلید API رو اینجا وارد کن" class="mt-2 w-full p-2 border rounded hidden focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="mt-2"><a href="#" id="apiKeyLink" target="_blank" class="text-blue-500 hover:underline">کلید رایگان بگیر</a></p>
+        </section>
+
+        <!-- قدم ۲: آپلود فایل‌ها -->
+        <section class="step mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۲: افزودن محتوای زیرنویس و ویدیو</h2>
+            <div class="upload-area border-2 border-dashed border-gray-300 p-6 text-center rounded-lg hover:border-blue-500 transition duration-300" id="uploadArea">
+                <p class="text-gray-600">فایل‌های SRT، VTT یا SSA/ASS رو بکش و رها کن</p>
+                <input type="file" id="fileInput" accept=".srt,.vtt,.ssa,.ass" multiple class="hidden">
+                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">انتخاب فایل‌های زیرنویس</button>
+            </div>
+            <div class="mt-4">
+                <label class="block text-gray-600 mb-1">فایل برای پیش‌نمایش:</label>
+                <select id="fileSelect" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">فایلی انتخاب نشده</option>
+                </select>
+            </div>
+            <div class="upload-area border-2 border-dashed border-gray-300 p-6 text-center rounded-lg hover:border-blue-500 transition duration-300 mt-4" id="videoUploadArea">
+                <p class="text-gray-600">فایل ویدیویی (mp4، webm) برای پیش‌نمایش (اختیاری)</p>
+                <input type="file" id="videoInput" accept="video/*" class="hidden">
+                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">انتخاب ویدیو</button>
+            </div>
+            <!-- بخش جدید: آپلود صوتی برای STT -->
+            <div class="upload-area border-2 border-dashed border-green-300 p-6 text-center rounded-lg hover:border-green-500 transition duration-300 mt-4 bg-green-50" id="audioUploadArea">
+                <p class="text-gray-600">فایل صوتی (MP3، WAV) برای تبدیل به زیرنویس با Whisper</p>
+                <input type="file" id="audioInput" accept="audio/*" class="hidden">
+                <button id="sttBtn" class="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">تبدیل صدا به SRT</button>
+                <div id="sttProgress" class="mt-2 hidden">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="sttBar" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="sttStatus" class="text-sm text-gray-500 mt-1">در حال تبدیل...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- قدم ۳: تنظیمات و ترجمه -->
+        <section class="step p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۳: نهایی‌سازی و ترجمه</h2>
+            
+            <!-- انتخاب زبان و مدل -->
+            <div class="settings mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">زبان و مدل</h3>
+                    <label class="block text-gray-600 mb-1">زبان مقصد:</label>
+                    <select id="language" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="فارسی">فارسی</option>
+                        <option value="انگلیسی">انگلیسی</option>
+                        <option value="فرانسوی">فرانسوی</option>
+                        <option value="اسپانیایی">اسپانیایی</option>
+                        <option value="آلمانی">آلمانی</option>
+                    </select>
+                    <label class="block text-gray-600 mb-1 mt-2">مدل AI:</label>
+                    <select id="model" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">مدلی انتخاب نشده</option>
+                    </select>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">تنظیمات پیشرفته</h3>
+                    <label class="block text-gray-600 mb-1">تاخیر بین درخواست‌ها (میلی‌ثانیه):</label>
+                    <input type="number" id="delay" value="4000" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <!-- تنظیمات پرامپت -->
+            <div class="settings mb-4">
+                <h3 class="text-lg font-medium text-gray-600 mb-2">تنظیمات پرامپت و جداکننده</h3>
+                <label class="block text-gray-600 mb-1">جداکننده متن (مثل \n):</label>
+                <input type="text" id="separator" value="\n" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-gray-600 mb-1 mt-2">لحن (مثل رسمی، غیررسمی):</label>
+                <input type="text" id="tone" value="رسمی" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-gray-600 mb-1 mt-2">پرامپت سفارشی:</label>
+                <textarea id="prompt" rows="4" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">ترجمه متن زیرنویس داخل <> به {LANG}. دستورات: - معنای اصلی رو حفظ کن. - لحن {TONE} رو اتخاذ کن. - جریان طبیعی برای گفتگو داشته باشه. - طول متن مناسب زیرنویس باشه. - دقیقاً تعداد خطوط اصلی رو نگه دار. - فقط متن ترجمه‌شده رو با --- جدا کن. <{TEXT}></textarea>
+                <label class="block mt-2"><input type="checkbox" id="noCensor"> عدم سانسور محتوای صریح</label>
+            </div>
+
+            <div class="flex items-center gap-2 mb-4">
+                <button id="translateBtn" disabled class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition duration-300 hover:scale-105 w-full">شروع ترجمه</button>
+                <button id="newTranslateBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition duration-300 hover:scale-105 w-full">شروع ترجمه جدید</button>
+                <div id="spinner" class="spinner"></div>
+            </div>
+
+            <!-- نوارهای پیشرفت -->
+            <div id="progressBars" class="mb-4"></div>
+
+            <!-- پیش‌نمایش ویدیو -->
+            <div class="mt-4">
+                <h3 class="text-lg font-medium text-gray-600 mb-2">پیش‌نمایش ویدیو (اختیاری)</h3>
+                <video id="videoPlayer" controls class="w-full rounded-lg shadow-md">
+                    <source id="videoSource">
+                    <track id="subtitleTrack" kind="subtitles" srclang="fa" label="زیرنویس">
+                </video>
+            </div>
+
+            <!-- پیش‌نمایش زیرنویس -->
+            <div class="mt-4">
+                <h3 class="text-lg font-medium text-gray-600 mb-2">پیش‌نمایش زیرنویس</h3>
+                <table class="w-full border-collapse border border-gray-200">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border p-3 text-gray-700">شماره</th>
+                            <th class="border p-3 text-gray-700">تایم‌کد</th>
+                            <th class="border p-3 text-gray-700">متن اصلی</th>
+                            <th class="border p-3 text-gray-700">متن ترجمه‌شده</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewTable"></tbody>
+                </table>
+            </div>
+
+            <!-- تاریخچه ترجمه‌ها -->
+            <div class="mt-4">
+                <h3 class="text-lg font-medium text-gray-600 mb-2">تاریخچه ترجمه‌ها</h3>
+                <div class="flex gap-2 mb-2">
+                    <select id="historyFilter" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">همه زبان‌ها</option>
+                        <option value="فارسی">فارسی</option>
+                        <option value="انگلیسی">انگلیسی</option>
+                        <option value="فرانسوی">فرانسوی</option>
+                        <option value="اسپانیایی">اسپانیایی</option>
+                        <option value="آلمانی">آلمانی</option>
+                    </select>
+                    <button id="sortHistoryBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">مرتب‌سازی (جدید به قدیم)</button>
+                </div>
+                <select id="historySelect" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">ترجمه‌ای انتخاب نشده</option>
+                </select>
+                <textarea id="output" rows="10" readonly placeholder="خروجی ترجمه یا تاریخچه اینجا نمایش داده می‌شود..." class="mt-2 w-full p-2 border rounded bg-gray-50 font-mono focus:outline-none"></textarea>
+            </div>
+        </section>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
