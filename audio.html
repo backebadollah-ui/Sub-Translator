@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تبدیل صوت به متن</title>
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- منوی کناری -->
+    <div class="fixed right-0 top-0 h-full w-64 bg-white shadow-lg p-4">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">منو</h2>
+        <nav class="space-y-4">
+            <a href="index.html" id="translateMenuItem" class="block w-full py-3 px-4 text-right text-lg font-medium text-gray-700 rounded-lg hover:bg-blue-500 hover:text-white transition duration-300">ترجمه</a>
+            <a href="audio.html" id="audioMenuItem" class="block w-full py-3 px-4 text-right text-lg font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-blue-500 hover:text-white transition duration-300">تبدیل صوت</a>
+        </nav>
+    </div>
+    
+    <!-- محتوای اصلی -->
+    <div class="pr-64 p-4">
+        <div class="container bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full mx-auto">
+            <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">تبدیل صوت به متن</h1>
+            <p class="text-gray-600 mb-6 text-center">تبدیل صوت به متن با استفاده از Whisper</p>
+
+            <!-- قدم ۱: API Key -->
+            <section class="step mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۱: انتخاب روش تبدیل</h2>
+                <p class="text-gray-600 mb-4">می‌توانید از API رایگان HuggingFace یا اجرای مدل لوکال (whisper.cpp) استفاده کنید.</p>
+                <div class="flex flex-col gap-2 mb-2">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="transcribeMode" id="modeApi" value="api" checked class="ml-2">
+                        <span>API HuggingFace (رایگان/با کلید)</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="transcribeMode" id="modeLocal" value="local" class="ml-2">
+                        <span>اجرای لوکال (نیازمند دانلود مدل)</span>
+                    </label>
+                </div>
+                <div id="apiKeySection">
+                    <button id="addKeyBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition duration-300 hover:scale-105">افزودن کلید جدید</button>
+                    <input type="password" id="apiKey" placeholder="کلید API HuggingFace رو اینجا وارد کن (اختیاری)" class="mt-2 w-full p-2 border rounded hidden focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="mt-2"><a href="https://huggingface.co/settings/tokens" id="apiKeyLink" target="_blank" class="text-blue-500 hover:underline">کلید رایگان HuggingFace بگیر</a></p>
+                </div>
+                <div id="localModelSection" class="hidden mt-2 bg-yellow-50 border border-yellow-300 rounded p-3 text-yellow-800">
+                    <b>توجه:</b> برای اجرای لوکال باید:
+                    <ul class="list-disc pr-5">
+                        <li>یک مدل Whisper را از <a href="https://huggingface.co/ggerganov/whisper.cpp" target="_blank" class="text-blue-600 underline">اینجا (HuggingFace)</a> دانلود کنید.</li>
+                        <li>سورس و فایل اجرایی مرورگر را از <a href="https://github.com/ggerganov/whisper.cpp/tree/master/examples/whisper.wasm" target="_blank" class="text-blue-600 underline">whisper.cpp-web (سورس و WASM)</a> دریافت کنید.</li>
+                    </ul>
+                    پس از دانلود، فایل مدل را انتخاب کنید و فایل wasm را در کنار پروژه قرار دهید.<br>
+                    <span class="text-xs">برای راهنمای کامل‌تر به <a href="https://github.com/ggerganov/whisper.cpp/tree/master/examples/whisper.wasm" target="_blank" class="text-blue-600 underline">مستندات whisper.cpp-wasm</a> مراجعه کنید.</span>
+                    <input type="file" id="localModelInput" accept=".bin,.gguf" class="mt-2 w-full p-2 border rounded">
+                    <div id="localModelStatus" class="mt-1 text-xs"></div>
+                </div>
+            </section>
+
+            <!-- قدم ۲: آپلود فایل‌ها -->
+            <section class="step mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۲: افزودن فایل صوتی</h2>
+                <div class="upload-area border-2 border-dashed border-gray-300 p-6 text-center rounded-lg hover:border-blue-500 transition duration-300" id="audioUploadArea">
+                    <p class="text-gray-600">فایل‌های صوتی (MP3، WAV، M4A) یا ویدیویی را اینجا رها کنید</p>
+                    <input type="file" id="audioFileInput" accept="audio/*,video/*" class="hidden">
+                    <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">انتخاب فایل صوتی</button>
+                </div>
+            </section>
+
+            <!-- قدم ۳: تنظیمات و تبدیل -->
+            <section class="step p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h2 class="text-xl font-semibold text-gray-700 mb-2">قدم ۳: تنظیمات و تبدیل</h2>
+                
+                <div class="settings mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-600 mb-2">تنظیمات اصلی</h3>
+                        <label class="block text-gray-600 mb-1">زبان تشخیص:</label>
+                        <select id="language" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="auto">تشخیص خودکار</option>
+                            <option value="fa">فارسی</option>
+                            <option value="en">انگلیسی</option>
+                            <option value="fr">فرانسوی</option>
+                            <option value="es">اسپانیایی</option>
+                            <option value="de">آلمانی</option>
+                        </select>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-600 mb-2">تنظیمات پیشرفته</h3>
+                        <label class="block text-gray-600 mb-1">مدل Whisper:</label>
+                        <select id="whisperModel" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="base">پایه (سریع)</option>
+                            <option value="small">کوچک</option>
+                            <option value="medium">متوسط</option>
+                            <option value="large">بزرگ (دقیق)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 mb-4">
+                    <button id="transcribeBtn" disabled class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition duration-300 hover:scale-105 w-full">شروع تبدیل</button>
+                    <button id="newTranscribeBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition duration-300 hover:scale-105 w-full">تبدیل جدید</button>
+                    <div id="spinner" class="spinner"></div>
+                </div>
+
+                <!-- نوار پیشرفت -->
+                <div id="progressBar" class="mb-4"></div>
+
+                <!-- خروجی -->
+                <div class="mt-4">
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">خروجی تبدیل</h3>
+                    <textarea id="output" rows="10" readonly placeholder="متن تبدیل‌شده اینجا نمایش داده می‌شود..." class="w-full p-2 border rounded bg-gray-50 font-mono focus:outline-none"></textarea>
+                    <div class="mt-2 flex gap-2">
+                        <button id="downloadSrtBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">دانلود SRT</button>
+                        <button id="downloadTxtBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">دانلود TXT</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+    <script src="audio.js"></script>
+</body>
+</html>

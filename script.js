@@ -1,15 +1,17 @@
 let apiKeys = JSON.parse(localStorage.getItem('apiKeys')) || {
     gemini: '',
     deepseek: '',
-    huggingface: '',
     openrouter: ''
 };
 let settings = JSON.parse(localStorage.getItem('translateSettings')) || {
-    delay: 4000,
+    delay: 8000, // افزایش تاخیر پیش‌فرض به 8 ثانیه
+    initialDelay: 4000, // افزایش تاخیر اولیه به 4 ثانیه
+    maxDelay: 60000, // افزایش حداکثر تاخیر به 60 ثانیه
     separator: '\n',
     tone: 'رسمی',
-    prompt: 'ترجمه متن زیرنویس داخل <> به {LANG}. دستورات: - معنای اصلی رو حفظ کن. - لحن {TONE} رو اتخاذ کن. - جریان طبیعی برای گفتگو داشته باشه. - طول متن مناسب زیرنویس باشه. - دقیقاً تعداد خطوط اصلی رو نگه دار. - فقط متن ترجمه‌شده رو با --- جدا کن. <{TEXT}>',
-    noCensor: false
+    prompt: 'متن زیر را با حفظ معنای دقیق به {LANG} ترجمه کن. لحن ترجمه {TONE} باشد و برای زیرنویس مناسب باشد. فقط متن ترجمه شده را بدون هیچ توضیح اضافی برگردان.\n\nمتن:\n{TEXT}\n---\nترجمه:',
+    noCensor: false,
+    retryAttempts: 5 // افزایش تعداد تلاش‌ها به 5 بار
 };
 
 if (apiKeys.gemini) {
@@ -23,13 +25,19 @@ document.getElementById('tone').value = settings.tone;
 document.getElementById('prompt').value = settings.prompt;
 document.getElementById('noCensor').checked = settings.noCensor;
 
+// تابع کمکی برای تاخیر
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 function saveSettings() {
     settings = {
-        delay: parseInt(document.getElementById('delay').value) || 4000,
+        delay: parseInt(document.getElementById('delay').value) || 8000,
         separator: document.getElementById('separator').value || '\n',
         tone: document.getElementById('tone').value || 'رسمی',
         prompt: document.getElementById('prompt').value || settings.prompt,
-        noCensor: document.getElementById('noCensor').checked
+        noCensor: document.getElementById('noCensor').checked,
+        retryAttempts: 5,
+        initialDelay: 4000,
+        maxDelay: 60000
     };
     localStorage.setItem('translateSettings', JSON.stringify(settings));
 }
@@ -73,18 +81,6 @@ const fileInput = document.getElementById('fileInput');
 const videoUploadArea = document.getElementById('videoUploadArea');
 const videoInput = document.getElementById('videoInput');
 const fileSelect = document.getElementById('fileSelect');
-const audioInput = document.getElementById('audioInput');
-const audioSelectBtn = document.getElementById('audioSelectBtn');
-const sttBtn = document.getElementById('sttBtn');
-const sttProgress = document.getElementById('sttProgress');
-const sttBar = document.getElementById('sttBar');
-const sttStatus = document.getElementById('sttStatus');
-
-let subtitleFiles = [];
-let currentSubtitles = [];
-let currentFileType = 'srt';
-let hasVideo = false;
-let assStyles = {};
 
 uploadArea.addEventListener('dragover', (e) => e.preventDefault());
 uploadArea.addEventListener('drop', (e) => {
@@ -104,115 +100,11 @@ videoUploadArea.addEventListener('drop', (e) => {
 document.querySelector('#videoUploadArea button').addEventListener('click', () => videoInput.click());
 videoInput.addEventListener('change', (e) => loadVideo(e.target.files[0]));
 
-audioInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        sttBtn.disabled = false;
-    } else {
-        sttBtn.disabled = true;
-    }
-});
-audioSelectBtn.addEventListener('click', () => audioInput.click());
-sttBtn.addEventListener('click', () => transcribeAudioToSRT());
-
-let whisper = null;
-async function initializeWhisper() {
-    if (typeof WhisperTranscriber === 'undefined') {
-        sttStatus.textContent = 'Whisper Transcriber بارگذاری نشده، لطفاً صفحه را رفرش کنید.';
-        sttProgress.classList.remove('hidden');
-        return null;
-    }
-    if (!whisper) {
-        try {
-            sttStatus.textContent = 'در حال بارگذاری مدل Whisper...';
-            sttProgress.classList.remove('hidden');
-            whisper = await WhisperTranscriber.create({
-                model: 'tiny-en-q5_1', // مدل سبک (~75 MB)، می‌تونی به 'base-en-q5_1' تغییر بدی (دقت بیشتر، ~150 MB)
-                progressCallback: (progress) => {
-                    sttBar.style.width = `${progress * 100}%`;
-                    sttStatus.textContent = `دانلود مدل: ${Math.round(progress * 100)}%`;
-                }
-            });
-            sttStatus.textContent = 'آماده برای تبدیل صدا';
-            return whisper;
-        } catch (error) {
-            console.error('خطا در بارگذاری Whisper:', error);
-            sttStatus.textContent = 'خطا در بارگذاری Whisper: ' + error.message;
-            alert('خطا در بارگذاری Whisper: ' + error.message);
-            sttProgress.classList.add('hidden');
-            return null;
-        }
-    }
-    return whisper;
-}
-
-async function transcribeAudioToSRT() {
-    if (!audioInput.files[0]) {
-        alert('لطفاً فایل صوتی انتخاب کنید.');
-        return;
-    }
-    const whisperInstance = await initializeWhisper();
-    if (!whisperInstance) return;
-
-    const file = audioInput.files[0];
-    const arrayBuffer = await file.arrayBuffer();
-    sttStatus.textContent = 'در حال پردازش فایل صوتی...';
-    sttProgress.classList.remove('hidden');
-
-    try {
-        sttStatus.textContent = 'تبدیل صدا به متن...';
-        const result = await whisperInstance.transcribe({
-            audio: arrayBuffer,
-            progressCallback: (progress) => {
-                sttBar.style.width = `${progress * 100}%`;
-                sttStatus.textContent = `تبدیل: ${Math.round(progress * 100)}%`;
-            }
-        });
-
-        const segments = result.segments;
-        let srtContent = '';
-        segments.forEach((segment, index) => {
-            const start = new Date(segment.start * 1000).toISOString().substr(11, 12).replace('.', ',');
-            const end = new Date(segment.end * 1000).toISOString().substr(11, 12).replace('.', ',');
-            srtContent += `${index + 1}\n${start} --> ${end}\n${segment.text.trim()}\n\n`;
-        });
-
-        const fileObj = {
-            file: new File([srtContent], `${file.name}.srt`, { type: 'text/plain' }),
-            type: 'srt',
-            subtitles: parseSrt(srtContent),
-            translated: [],
-            progress: 100,
-            styles: {}
-        };
-        subtitleFiles.push(fileObj);
-        fileSelect.innerHTML = '<option value="">فایلی انتخاب نشده</option>';
-        subtitleFiles.forEach((f, idx) => {
-            const option = document.createElement('option');
-            option.value = idx;
-            option.textContent = f.file.name;
-            fileSelect.appendChild(option);
-        });
-        fileSelect.value = subtitleFiles.length - 1;
-        currentSubtitles = fileObj.subtitles;
-        currentFileType = 'srt';
-        assStyles = {};
-        document.getElementById('output').value = srtContent;
-        renderPreview(currentSubtitles, []);
-        if (hasVideo) {
-            updateVideoSubtitles(currentSubtitles, currentFileType, assStyles);
-        }
-        updateProgressBars();
-        sttStatus.textContent = 'تبدیل با موفقیت انجام شد!';
-    } catch (error) {
-        console.error('خطا در تبدیل صدا:', error);
-        sttStatus.textContent = 'خطا در تبدیل صدا: ' + error.message;
-        alert('خطا در تبدیل صدا: ' + error.message);
-    } finally {
-        sttProgress.classList.add('hidden');
-        audioInput.value = '';
-        sttBtn.disabled = true;
-    }
-}
+let subtitleFiles = [];
+let currentSubtitles = [];
+let currentFileType = 'srt';
+let hasVideo = false;
+let assStyles = {};
 
 function loadSubtitles(files) {
     if (!files || files.length === 0) {
@@ -307,14 +199,27 @@ function loadVideo(file) {
 
 function parseSrt(content) {
     const subtitles = [];
-    const blocks = content.split('\n\n');
+    // نرمال‌سازی خط جدید و حذف BOM
+    const normalizedContent = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // جدا کردن بلوک‌ها با در نظر گرفتن فاصله‌های اضافی
+    const blocks = normalizedContent.split(/\n\s*\n/).filter(block => block.trim());
+    
     for (const block of blocks) {
-        const lines = block.trim().split('\n');
+        const lines = block.trim().split('\n').filter(line => line.trim());
         if (lines.length >= 3) {
-            const index = lines[0];
-            const timecode = lines[1];
-            const text = lines.slice(2).join('\n');
-            subtitles.push({ index, timecode, text });
+            // بررسی اعتبار شماره زیرنویس
+            const index = lines[0].trim();
+            if (!/^\d+$/.test(index)) continue;
+
+            // بررسی اعتبار تایم‌کد
+            const timecode = lines[1].trim();
+            if (!/^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}$/.test(timecode)) continue;
+
+            // ترکیب خطوط متن باقیمانده
+            const text = lines.slice(2).join('\n').trim();
+            if (text) {
+                subtitles.push({ index, timecode, text });
+            }
         }
     }
     if (subtitles.length === 0) throw new Error('فایل SRT خالی یا نامعتبر است.');
@@ -382,12 +287,8 @@ function parseSsa(content) {
 
 async function fetchModels(service) {
     const modelSelect = document.getElementById('model');
-    modelSelect.innerHTML = '<option value="">مدل را انتخاب کنید</option>';
+    modelSelect.innerHTML = '<option value="">در حال بارگذاری مدل‌ها...</option>';
     try {
-        if (service === 'gemini' && !apiKeys.gemini) {
-            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
-            return;
-        }
         if (service === 'gemini') {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKeys.gemini}`);
             if (!response.ok) throw new Error(`خطا: ${response.status}`);
@@ -400,9 +301,6 @@ async function fetchModels(service) {
                 option.textContent = model;
                 modelSelect.appendChild(option);
             });
-        } else if (service === 'deepseek' && !apiKeys.deepseek) {
-            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
-            return;
         } else if (service === 'deepseek') {
             modelSelect.innerHTML = '<option value="">مدل را انتخاب کنید</option>';
             ['DeepSeek-Pro', 'DeepSeek-RAG'].forEach(model => {
@@ -413,9 +311,6 @@ async function fetchModels(service) {
             });
         } else if (service === 'huggingface') {
             modelSelect.innerHTML = '<option value="facebook/nllb-200-distilled-600M">NLLB-200 (Multilingual)</option>';
-        } else if (service === 'openrouter' && !apiKeys.openrouter) {
-            modelSelect.innerHTML = '<option value="">نیاز به کلید API برای بارگذاری مدل‌ها</option>';
-            return;
         } else if (service === 'openrouter') {
             const response = await fetch('https://openrouter.ai/api/v1/models', {
                 headers: { 'Authorization': `Bearer ${apiKeys.openrouter}` }
@@ -583,8 +478,110 @@ function updateVideoSubtitles(subtitles, fileType, styles = {}) {
 
 async function translateWithService(service, model, subtitle, lang, tone, separator, noCensor) {
     const prompt = settings.prompt.replace('{LANG}', lang).replace('{TONE}', tone).replace('{TEXT}', subtitle.text) + (noCensor ? '\nعدم سانسور محتوای صریح.' : '');
-    let response;
-    try {
+    let retryCount = 0;
+    const maxRetries = settings.retryAttempts || 3;
+    const baseDelay = settings.initialDelay || 2000;
+    
+    // تابع کمکی برای تاخیر
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // اگر قبلاً خطای Rate Limit داشته‌ایم، تاخیر را افزایش می‌دهیم
+    if (window.lastRateLimitError) {
+        const timeSinceError = Date.now() - window.lastRateLimitError;
+        if (timeSinceError < 60000) { // اگر کمتر از یک دقیقه از آخرین خطا گذشته
+            await sleep(Math.min(settings.maxDelay, settings.delay * 2));
+        }
+    }
+
+    while (retryCount < maxRetries) {
+        try {
+            // ارسال درخواست به API
+            let response;
+            if (service === 'gemini') {
+                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKeys.gemini },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+            } else if (service === 'deepseek') {
+                response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${apiKeys.deepseek}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+                });
+            } else if (service === 'huggingface') {
+                response = await fetch('https://api-inference.huggingface.co/models/facebook/nllb-200-distilled-600M', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKeys.huggingface || ''}` },
+                    body: JSON.stringify({ inputs: subtitle.text, parameters: { src_lang: 'eng_Latn', tgt_lang: lang === 'فارسی' ? 'pes_Arab' : 'eng_Latn' } })
+                });
+            } else if (service === 'openrouter') {
+                response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKeys.openrouter}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': window.location.origin,
+                        'X-Title': 'Subtitle Translator'
+                    },
+                    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+                });
+            }
+
+            if (!response.ok) {
+                const errorStatus = response.status;
+                if (errorStatus === 429) {
+                    window.lastRateLimitError = Date.now();
+                    throw new Error('محدودیت تعداد درخواست (Rate Limit). در حال افزایش تاخیر...');
+                }
+                throw new Error(`خطای API: ${errorStatus}`);
+            }
+            
+            const data = await response.json();
+            let translatedText = '';
+
+            if (service === 'huggingface') {
+                translatedText = data[0]?.translation_text || data[0]?.generated_text || data[0]?.text || '';
+                console.log('HuggingFace response:', data); // برای دیباگ
+            } else if (service === 'gemini') {
+                translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (!translatedText) {
+                    console.warn('پاسخ نامعتبر از جمینای:', JSON.stringify(data, null, 2));
+                    throw new Error('پاسخ نامعتبر از API جمینای');
+                }
+            } else {
+                translatedText = data.choices?.[0]?.message?.content || '';
+            }
+            
+            // قبل از پردازش نهایی، پاسخ خام را لاگ می‌کنیم
+            console.log(`Raw ${service} response:`, translatedText);
+            
+            translatedText = translatedText
+                .split('---').pop()
+                .replace(/<[^>]+>/g, '')
+                .trim();
+            
+            if (!translatedText) {
+                throw new Error('دریافت ترجمه خالی از API');
+            }
+            
+            return translatedText;
+
+        } catch (error) {
+            console.warn(`تلاش ${retryCount + 1}/${maxRetries} با خطا مواجه شد:`, error.message);
+            if (retryCount >= maxRetries - 1) throw error;
+            
+            retryCount++;
+            const delayTime = Math.min(settings.maxDelay, baseDelay * Math.pow(2, retryCount));
+            console.log(`انتظار ${delayTime/1000} ثانیه قبل از تلاش مجدد...`);
+            await sleep(delayTime);
+            continue;
+        }
+    }
+    
+    throw new Error(`خطا پس از ${maxRetries} تلاش ناموفق`);
+}    async function tryRequest() {
+        try {
         if (service === 'gemini') {
             response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
                 method: 'POST',
@@ -620,7 +617,13 @@ async function translateWithService(service, model, subtitle, lang, tone, separa
         if (service === 'huggingface') {
             return data[0]?.translatedText || 'خطا در ترجمه';
         } else {
-            return data.candidates?.[0]?.content?.parts?.[0]?.text?.split('---').join(separator) || data.choices?.[0]?.message?.content?.split('---').join(separator) || 'خطا در ترجمه';
+            let translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || data.choices?.[0]?.message?.content || 'خطا در ترجمه';
+            // حذف متن اصلی که ممکن است در خروجی باشد
+            translatedText = translatedText
+                .split('---').pop() // فقط آخرین بخش بعد از جداکننده را نگه می‌داریم
+                .replace(/<[^>]+>/g, '') // حذف متن داخل علامت‌های <>
+                .trim();
+            return translatedText || 'خطا در ترجمه';
         }
     } catch (error) {
         throw error;
@@ -642,7 +645,6 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
     const modelSelect = document.getElementById('model');
     const lang = languageSelect.value || 'فارسی';
     const model = modelSelect.value;
-    const delay = settings.delay;
     const separator = settings.separator;
     const tone = settings.tone;
     const noCensor = settings.noCensor;
@@ -650,11 +652,6 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
     const spinner = document.getElementById('spinner');
     spinner.style.display = 'inline-block';
     document.getElementById('translateBtn').disabled = true;
-
-    let fallbackServices = ['huggingface', 'deepseek'].filter(s => s !== service);
-    if (service === 'openrouter') {
-        fallbackServices = ['huggingface', 'deepseek'];
-    }
 
     for (let fileIndex = 0; fileIndex < subtitleFiles.length; fileIndex++) {
         const fileObj = subtitleFiles[fileIndex];
@@ -673,45 +670,37 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
 
         for (let i = 0; i < currentSubtitles.length; i++) {
             const subtitle = currentSubtitles[i];
-            let retries = 0;
-            const maxRetries = 3;
-            let currentService = service;
-
-            while (retries < maxRetries) {
-                try {
-                    const translatedText = await translateWithService(currentService, model, subtitle, lang, tone, separator, noCensor);
-                    translated.push({ ...subtitle, text: translatedText });
-                    fileObj.progress = Math.round((i + 1) / currentSubtitles.length * 100);
-                    outputArea.value = `در حال ترجمه فایل ${fileIndex + 1} از ${subtitleFiles.length}: ${fileObj.file.name}... (${fileObj.progress}%)\n`;
-                    if (fileIndex === parseInt(fileSelect.value)) {
-                        renderPreview(currentSubtitles, translated);
-                        if (hasVideo) {
-                            updateVideoSubtitles(translated, currentFileType, fileObj.styles);
-                        }
-                    }
-                    updateProgressBars();
-                    break;
-                } catch (error) {
-                    console.error(`خطا در ترجمه خط ${i + 1} از ${fileObj.file.name} با ${currentService}:`, error);
-                    retries++;
-                    if (retries >= maxRetries && fallbackServices.length > 0) {
-                        currentService = fallbackServices.shift();
-                        retries = 0;
-                        outputArea.value += `سوئیچ به ${currentService}...\n`;
-                        continue;
-                    } else if (retries >= maxRetries) {
-                        alert(`خطا در ترجمه خط ${i + 1} از ${fileObj.file.name}: ${error.message}`);
-                        outputArea.value = `ترجمه ${fileObj.file.name} متوقف شد.`;
-                        spinner.style.display = 'none';
-                        document.getElementById('translateBtn').disabled = false;
-                        return;
+            try {
+                const translatedText = await translateWithService(service, model, subtitle, lang, tone, separator, noCensor);
+                translated.push({ ...subtitle, text: translatedText });
+                fileObj.progress = Math.round((i + 1) / currentSubtitles.length * 100);
+                outputArea.value = `در حال ترجمه فایل ${fileIndex + 1} از ${subtitleFiles.length}: ${fileObj.file.name}... (${fileObj.progress}%)\n`;
+                if (fileIndex === parseInt(fileSelect.value)) {
+                    renderPreview(currentSubtitles, translated);
+                    if (hasVideo) {
+                        updateVideoSubtitles(translated, currentFileType, fileObj.styles);
                     }
                 }
-                await new Promise(resolve => setTimeout(resolve, delay));
+                updateProgressBars();
+            } catch (error) {
+                console.error(`خطا در ترجمه خط ${i + 1} از ${fileObj.file.name}:`, error);
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    await sleep(baseDelay * Math.pow(2, retryCount));
+                    continue;
+                } else {
+                    alert(`خطا در ترجمه خط ${i + 1} از ${fileObj.file.name}: ${error.message}`);
+                    outputArea.value = `ترجمه ${fileObj.file.name} متوقف شد.`;
+                    spinner.style.display = 'none';
+                    document.getElementById('translateBtn').disabled = false;
+                    return;
+                }
             }
+            
+            await sleep(settings.delay);
         }
 
-        if (translated.length === 0) continue;
+        if (!translated.length) continue;
 
         let outputSrt = '';
         translated.forEach(sub => {
@@ -787,7 +776,6 @@ document.getElementById('newTranslateBtn').addEventListener('click', () => {
     hasVideo = false;
     document.getElementById('fileInput').value = '';
     document.getElementById('videoInput').value = '';
-    document.getElementById('audioInput').value = '';
     document.getElementById('fileSelect').innerHTML = '<option value="">فایلی انتخاب نشده</option>';
     document.getElementById('language').value = 'فارسی';
     document.getElementById('model').value = '';
@@ -815,10 +803,16 @@ function download(content, filename, type) {
     URL.revokeObjectURL(url);
 }
 
-if (apiKeys.gemini) {
-    document.getElementById('service').value = 'gemini';
-    fetchModels('gemini');
-} else {
-    document.getElementById('service').value = 'huggingface';
-    fetchModels('huggingface');
+async function init() {
+    if (apiKeys.gemini) {
+        document.getElementById('service').value = 'gemini';
+        await fetchModels('gemini');
+    } else {
+        document.getElementById('service').value = 'huggingface';
+        await fetchModels('huggingface');
+    }
+    loadTranslationHistory();
 }
+
+// Start initialization when DOM is loaded
+document.addEventListener('DOMContentLoaded', init);

@@ -5,15 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ترجمه‌گر زیرنویس AI</title>
     <link href="styles.css" rel="stylesheet">
-    <!-- Whisper Web Transcriber CDN - نسخه معتبر -->
-    <script type="module" src="https://unpkg.com/whisper-web-transcriber@0.2.4/dist/index.esm.js" defer></script>
-    <!-- Favicon ساده -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎥</text></svg>" type="image/svg+xml">
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-    <div class="container bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full">
-        <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">ترجمه‌گر زیرنویس AI</h1>
-        <p class="text-gray-600 mb-6 text-center">ترجمه رایگان با هوش مصنوعی در ۳ قدم</p>
+<body class="bg-gray-100 min-h-screen">
+    <!-- منوی کناری -->
+    <div class="fixed right-0 top-0 h-full w-64 bg-white shadow-lg p-4">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">منو</h2>
+        <nav class="space-y-4">
+            <a href="index.html" id="translateMenuItem" class="block w-full py-3 px-4 text-right text-lg font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-blue-500 hover:text-white transition duration-300">ترجمه</a>
+            <a href="audio.html" id="audioMenuItem" class="block w-full py-3 px-4 text-right text-lg font-medium text-gray-700 rounded-lg hover:bg-blue-500 hover:text-white transition duration-300">تبدیل صوت</a>
+        </nav>
+    </div>
+    
+    <!-- محتوای اصلی -->
+    <div class="pr-64 p-4">
+        <div class="container bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full mx-auto">
+            <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">ترجمه‌گر زیرنویس</h1>
+            <p class="text-gray-600 mb-6 text-center">ترجمه رایگان با هوش مصنوعی در ۳ قدم</p>
 
         <!-- قدم ۱: API Key -->
         <section class="step mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -49,19 +56,6 @@
                 <p class="text-gray-600">فایل ویدیویی (mp4، webm) برای پیش‌نمایش (اختیاری)</p>
                 <input type="file" id="videoInput" accept="video/*" class="hidden">
                 <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105">انتخاب ویدیو</button>
-            </div>
-            <!-- بخش آپلود صوتی برای STT -->
-            <div class="upload-area border-2 border-dashed border-green-300 p-6 text-center rounded-lg hover:border-green-500 transition duration-300 mt-4 bg-green-50" id="audioUploadArea">
-                <p class="text-gray-600">فایل صوتی (MP3، WAV) برای تبدیل به زیرنویس با Whisper</p>
-                <input type="file" id="audioInput" accept="audio/*" class="hidden">
-                <button class="mt-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition duration-300 hover:scale-105" id="audioSelectBtn">انتخاب فایل صوتی</button>
-                <button id="sttBtn" disabled class="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition duration-300 hover:scale-105">تبدیل صدا به SRT</button>
-                <div id="sttProgress" class="mt-2 hidden">
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div id="sttBar" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                    </div>
-                    <p id="sttStatus" class="text-sm text-gray-500 mt-1">در حال تبدیل...</p>
-                </div>
             </div>
         </section>
 
@@ -101,7 +95,16 @@
                 <label class="block text-gray-600 mb-1 mt-2">لحن (مثل رسمی، غیررسمی):</label>
                 <input type="text" id="tone" value="رسمی" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <label class="block text-gray-600 mb-1 mt-2">پرامپت سفارشی:</label>
-                <textarea id="prompt" rows="4" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">ترجمه متن زیرنویس داخل <> به {LANG}. دستورات: - معنای اصلی رو حفظ کن. - لحن {TONE} رو اتخاذ کن. - جریان طبیعی برای گفتگو داشته باشه. - طول متن مناسب زیرنویس باشه. - دقیقاً تعداد خطوط اصلی رو نگه دار. - فقط متن ترجمه‌شده رو با --- جدا کن. <{TEXT}></textarea>
+                <textarea id="prompt" rows="4" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">لطفاً متن زیر را به {LANG} ترجمه کن. لحن ترجمه باید {TONE} باشد.
+دستورات مهم:
+1. فقط متن ترجمه شده را برگردان.
+2. از تکرار متن اصلی خودداری کن.
+3. ترجمه باید روان و طبیعی باشد.
+4. طول متن باید مناسب زیرنویس باشد.
+
+متن اصلی: {TEXT}
+---
+ترجمه:</textarea>
                 <label class="block mt-2"><input type="checkbox" id="noCensor"> عدم سانسور محتوای صریح</label>
             </div>
 
@@ -160,6 +163,8 @@
             </div>
         </section>
     </div>
+    <script src="parser-utils.js"></script>
+    <script src="translate-service.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
