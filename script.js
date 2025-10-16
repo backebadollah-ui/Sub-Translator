@@ -55,12 +55,36 @@ const serviceLinks = {
     huggingface: 'https://huggingface.co/settings/tokens'
 };
 
-document.getElementById('service').addEventListener('change', (e) => {
+document.getElementById('service').addEventListener('change', async (e) => {
     const service = e.target.value;
-    document.getElementById('apiKey').value = apiKeys[service] || '';
-    document.getElementById('apiKey').style.display = service === 'huggingface' ? 'none' : 'block';
+    const apiKeyInput = document.getElementById('apiKey');
+    const apiKeySection = document.getElementById('apiKey').parentElement;
+
+    // نمایش یا مخفی کردن بخش API Key
+    if (service === 'huggingface') {
+        apiKeySection.style.display = 'none';
+    } else {
+        apiKeySection.style.display = 'block';
+        apiKeyInput.value = apiKeys[service] || '';
+        
+        // اگر کلید وجود نداشت، نمایش پیام راهنما
+        if (!apiKeys[service]) {
+            alert(`لطفاً کلید API برای سرویس ${service} را وارد کنید. برای دریافت کلید رایگان روی لینک زیر کلیک کنید.`);
+            document.getElementById('apiKey').style.display = 'block';
+        }
+    }
+
     document.getElementById('apiKeyLink').href = serviceLinks[service];
-    fetchModels(service);
+    
+    // فقط اگر کلید داشتیم یا سرویس huggingface بود، مدل‌ها را دریافت کنیم
+    if (apiKeys[service] || service === 'huggingface') {
+        await fetchModels(service);
+    } else {
+        // در غیر این صورت لیست مدل‌ها را خالی کنیم
+        const modelSelect = document.getElementById('model');
+        modelSelect.innerHTML = '<option value="">ابتدا کلید API را وارد کنید</option>';
+        document.getElementById('translateBtn').disabled = true;
+    }
 });
 
 document.getElementById('addKeyBtn').addEventListener('click', () => {
@@ -288,10 +312,24 @@ function parseSsa(content) {
 async function fetchModels(service) {
     const modelSelect = document.getElementById('model');
     modelSelect.innerHTML = '<option value="">در حال بارگذاری مدل‌ها...</option>';
+    
     try {
         if (service === 'gemini') {
+            if (!apiKeys.gemini) {
+                modelSelect.innerHTML = '<option value="">لطفاً ابتدا کلید API را وارد کنید</option>';
+                document.getElementById('translateBtn').disabled = true;
+                return;
+            }
+            
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKeys.gemini}`);
-            if (!response.ok) throw new Error(`خطا: ${response.status}`);
+            if (response.status === 403) {
+                modelSelect.innerHTML = '<option value="">کلید API نامعتبر است</option>';
+                document.getElementById('translateBtn').disabled = true;
+                alert('کلید API جمینای نامعتبر است. لطفاً کلید معتبر را وارد کنید.');
+                return;
+            }
+            if (!response.ok) throw new Error(`خطای ${response.status}: ${await response.text()}`);
+            
             const data = await response.json();
             const models = data.models.filter(m => m.name.includes('gemini')).map(m => m.name.replace('models/', ''));
             modelSelect.innerHTML = '<option value="">مدل را انتخاب کنید</option>';
